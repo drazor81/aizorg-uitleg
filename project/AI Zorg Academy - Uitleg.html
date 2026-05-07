@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>AI Zorg Academy — Werkgevers-pitch</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #0a0a0a; overflow: hidden; }
+  #root { position: fixed; inset: 0; }
+</style>
+</head>
+<body>
+<div id="root" data-screen-label="00:00"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="animations.jsx"></script>
+<script type="text/babel" src="scenes/Scene1_Hook.jsx"></script>
+<script type="text/babel" src="scenes/Scene2_Risico.jsx"></script>
+<script type="text/babel" src="scenes/Scene3_Oplossing.jsx"></script>
+<script type="text/babel" src="scenes/Scene4_WatJeLeert.jsx"></script>
+<script type="text/babel" src="scenes/Scene5_Cijfers.jsx"></script>
+<script type="text/babel" src="scenes/Scene6_CTA.jsx"></script>
+
+<script type="text/babel">
+function AudioTrack({ src, volume = 0.6, startOffset = 0, fadeIn = 0 }) {
+  const { time, playing, duration } = useTimeline();
+  const audioRef = React.useRef(null);
+
+  // Init audio element once
+  React.useEffect(() => {
+    const a = new Audio(src);
+    a.preload = 'auto';
+    a.volume = 0;
+    audioRef.current = a;
+    return () => { a.pause(); audioRef.current = null; };
+  }, [src]);
+
+  // Play/pause + sync to playhead (with crop offset)
+  React.useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const target = time + startOffset;
+    if (Math.abs(a.currentTime - target) > 0.25) {
+      try { a.currentTime = Math.max(0, target); } catch (e) {}
+    }
+    if (playing) {
+      a.play().catch(() => {});
+    } else {
+      a.pause();
+    }
+  }, [playing, time, duration, startOffset]);
+
+  // Fade in at start, fade out at end
+  React.useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const fadeOutDur = 1.5;
+    const fadeOutStart = duration - fadeOutDur;
+    let v = volume;
+    if (fadeIn > 0 && time < fadeIn) {
+      v = volume * Math.max(0, Math.min(1, time / fadeIn));
+    }
+    if (time > fadeOutStart) {
+      const t = Math.max(0, Math.min(1, (time - fadeOutStart) / fadeOutDur));
+      v = Math.min(v, volume * (1 - t));
+    }
+    a.volume = v;
+  }, [time, duration, volume, fadeIn]);
+
+  return null;
+}
+
+function TimestampLabel() {
+  const t = useTime();
+  React.useEffect(() => {
+    const root = document.getElementById('root');
+    if (!root) return;
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    root.setAttribute('data-screen-label', `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`);
+  }, [Math.floor(t)]);
+  return null;
+}
+
+function App() {
+  return (
+    <Stage width={1080} height={1920} duration={44} background="#F8F9FA" persistKey="aiza-uitleg-v3">
+      <TimestampLabel />
+      <AudioTrack src="assets/Innovate_and_Inspire.mp3" volume={0.275} startOffset={5} fadeIn={1.2} />
+      <Scene1_Hook />
+      <Scene2_Risico />
+      <Scene3_Oplossing />
+      <Scene4_WatJeLeert />
+      <Scene5_Cijfers />
+      <Scene6_CTA />
+    </Stage>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

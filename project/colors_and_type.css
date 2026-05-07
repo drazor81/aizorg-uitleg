@@ -1,0 +1,216 @@
+/* ===========================================================
+   AI ZORG ACADEMY — COLORS & TYPE
+   Brand kern: rustige, ervaren collega; warm maar professioneel.
+   =========================================================== */
+
+/* ---------- Brand fonts (lokaal, zelfgehost) ---------- */
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/Inter-VariableFont_opsz_wght.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/Inter-Italic-VariableFont_opsz_wght.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("fonts/PlusJakartaSans-VariableFont_wght.ttf") format("truetype-variations");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("fonts/PlusJakartaSans-Italic-VariableFont_wght.ttf") format("truetype-variations");
+  font-weight: 200 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+:root {
+  /* === CORE BRAND COLORS === */
+  --aiza-blauw:       #0077B6;  /* Primair — vertrouwen, zorg */
+  --aiza-lichtblauw:  #00B4D8;  /* Accent — innovatie, AI */
+  --aiza-donkerblauw: #1B263B;  /* Tekst & headings */
+  --aiza-oranje:      #FF6B35;  /* CTA — actie, warmte */
+
+  /* === NEUTRALS === */
+  --aiza-wit:         #FFFFFF;
+  --aiza-achtergrond: #F8F9FA;  /* Page bg */
+  --aiza-grijs:       #E0E0E0;  /* Borders */
+  --aiza-grijs-licht: #F0F4F8;  /* Alt bg / uitklap panels */
+  --aiza-grijs-mid:   #9CA3AF;
+  --aiza-grijs-donker:#6B7280;  /* Secondary text */
+  --aiza-tekst-body:  #374151;  /* Body paragraph */
+
+  /* === SEMANTIC (kader) ACCENTS === */
+  --aiza-goed:        #22C55E;  /* Success / goede praktijk */
+  --aiza-goed-bg:     #F0FFF4;
+  --aiza-waarschuwing:#FF9800;  /* Let op */
+  --aiza-waarschuwing-bg:#FFF3E0;
+  --aiza-fout-bg:     #FFF5F5;
+  --aiza-fout-border: #FFCDD2;
+  --aiza-tip:         #00838F;  /* Tips / cyan */
+  --aiza-tip-bg:      #E0F7FA;
+  --aiza-info-bg:     #EFF8FF;  /* Voorbeeldkader */
+  --aiza-reflectie:   #F57F17;  /* 🤔 even nadenken */
+  --aiza-reflectie-bg:#FFFDE7;
+  --aiza-prompt:      #7C3AED;  /* Promptvoorbeelden */
+  --aiza-prompt-bg:   #F8F4FF;
+  --aiza-wet:         #3949AB;  /* AI Act / juridisch */
+
+  /* === CATEGORIE BADGES (blog) === */
+  --aiza-cat-praktijk-bg: #FFF0EB;
+  --aiza-cat-praktijk-fg: var(--aiza-oranje);
+  --aiza-cat-nieuws-bg:   #E3F2FD;
+  --aiza-cat-nieuws-fg:   var(--aiza-blauw);
+  --aiza-cat-uitleg-bg:   #E0F7FA;
+  --aiza-cat-uitleg-fg:   #00838F;
+
+  /* === SHADOWS === */
+  --aiza-shadow-sm:  0 2px 12px rgba(0,0,0,0.08);
+  --aiza-shadow-md:  0 4px 20px rgba(0,119,182,0.12);
+  --aiza-shadow-lg:  0 8px 32px rgba(0,0,0,0.12);
+  --aiza-shadow-cta: 0 4px 16px rgba(255,107,53,0.35);
+
+  /* === RADII === */
+  --aiza-radius-xs: 4px;
+  --aiza-radius-sm: 6px;
+  --aiza-radius-md: 8px;
+  --aiza-radius-lg: 12px;
+  --aiza-radius-xl: 16px;
+  --aiza-radius-pill: 20px;
+
+  /* === SPACING === */
+  --aiza-space-1: 4px;
+  --aiza-space-2: 8px;
+  --aiza-space-3: 12px;
+  --aiza-space-4: 16px;
+  --aiza-space-5: 20px;
+  --aiza-space-6: 24px;
+  --aiza-space-7: 28px;
+  --aiza-space-8: 32px;
+  --aiza-space-10: 40px;
+  --aiza-space-12: 48px;
+
+  /* === TYPOGRAPHY — FAMILIES === */
+  /* Brand prefers Inter (body) + Plus Jakarta Sans (display).
+     Productiemodules gebruiken op dit moment system-ui als fallback. */
+  --aiza-font-body:    "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --aiza-font-display: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
+  --aiza-font-mono:    "Courier New", Courier, monospace;
+
+  /* === TYPOGRAPHY — SIZES === */
+  --aiza-fs-xs:   12px;   /* labels, badges */
+  --aiza-fs-sm:   14px;   /* meta, breadcrumb */
+  --aiza-fs-base: 17px;   /* body default (mobile-first leesbaarheid) */
+  --aiza-fs-md:   18px;   /* quiz, lead */
+  --aiza-fs-lg:   20px;   /* h3 */
+  --aiza-fs-xl:   24px;   /* h2 (artikel) */
+  --aiza-fs-2xl:  26px;   /* h2 (module) */
+  --aiza-fs-3xl:  32px;   /* h1 */
+  --aiza-fs-display: 48px;
+
+  --aiza-lh-tight: 1.2;
+  --aiza-lh-snug:  1.4;
+  --aiza-lh-body:  1.7;  /* standaard body line-height */
+
+  --aiza-tracking-tight:  -0.01em;
+  --aiza-tracking-normal: 0;
+  --aiza-tracking-wide:   0.4px;
+  --aiza-tracking-caps:   0.8px;  /* uppercase labels */
+}
+
+/* ===========================================================
+   SEMANTIC ELEMENT VARS
+   =========================================================== */
+
+/* Body */
+.aiza-body,
+[data-aiza-scope] {
+  font-family: var(--aiza-font-body);
+  font-size: var(--aiza-fs-base);
+  line-height: var(--aiza-lh-body);
+  color: var(--aiza-donkerblauw);
+  background: var(--aiza-achtergrond);
+}
+
+/* Headings */
+.aiza-h1 {
+  font-family: var(--aiza-font-display);
+  font-size: var(--aiza-fs-3xl);
+  font-weight: 800;
+  line-height: var(--aiza-lh-tight);
+  color: var(--aiza-donkerblauw);
+  letter-spacing: var(--aiza-tracking-tight);
+}
+
+.aiza-h2 {
+  font-family: var(--aiza-font-display);
+  font-size: var(--aiza-fs-2xl);
+  font-weight: 700;
+  line-height: var(--aiza-lh-snug);
+  color: var(--aiza-donkerblauw);
+}
+
+.aiza-h3 {
+  font-family: var(--aiza-font-body);
+  font-size: var(--aiza-fs-lg);
+  font-weight: 600;
+  line-height: var(--aiza-lh-snug);
+  color: var(--aiza-donkerblauw);
+}
+
+.aiza-lead {
+  font-family: var(--aiza-font-body);
+  font-size: var(--aiza-fs-md);
+  line-height: 1.65;
+  color: var(--aiza-tekst-body);
+}
+
+.aiza-p {
+  font-family: var(--aiza-font-body);
+  font-size: var(--aiza-fs-base);
+  line-height: var(--aiza-lh-body);
+  color: var(--aiza-donkerblauw);
+}
+
+.aiza-small, .aiza-meta {
+  font-size: var(--aiza-fs-sm);
+  color: var(--aiza-grijs-donker);
+  line-height: 1.5;
+}
+
+.aiza-label {
+  font-size: var(--aiza-fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--aiza-tracking-caps);
+}
+
+.aiza-mono, .aiza-code {
+  font-family: var(--aiza-font-mono);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+/* Links */
+.aiza-a {
+  color: var(--aiza-blauw);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.aiza-a:hover { color: var(--aiza-oranje); }
+
+/* Focus ring */
+.aiza-focus:focus-visible,
+[data-aiza-scope] :focus-visible {
+  outline: 3px solid var(--aiza-lichtblauw);
+  outline-offset: 2px;
+}

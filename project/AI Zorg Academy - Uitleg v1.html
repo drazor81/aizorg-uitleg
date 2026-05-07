@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>AI Zorg Academy — Korte uitleg</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #0a0a0a; overflow: hidden; }
+  #root { position: fixed; inset: 0; }
+</style>
+</head>
+<body>
+<div id="root" data-screen-label="00:00"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="animations.jsx"></script>
+<script type="text/babel" src="scenes/Scene1_OchtendDruk.jsx"></script>
+<script type="text/babel" src="scenes/Scene2_TaakStapel.jsx"></script>
+<script type="text/babel" src="scenes/Scene3_OntdekkingApp.jsx"></script>
+<script type="text/babel" src="scenes/Scene4_DrieLessen.jsx"></script>
+<script type="text/babel" src="scenes/Scene5_WatIsHet.jsx"></script>
+<script type="text/babel" src="scenes/Scene6_VoorWerkgever.jsx"></script>
+<script type="text/babel" src="scenes/Scene7_Eindkaart.jsx"></script>
+
+<script type="text/babel">
+function TimestampLabel() {
+  const t = useTime();
+  React.useEffect(() => {
+    const root = document.getElementById('root');
+    if (!root) return;
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    root.setAttribute('data-screen-label', `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`);
+  }, [Math.floor(t)]);
+  return null;
+}
+
+function App() {
+  return (
+    <Stage width={1080} height={1920} duration={45} background="#F8F9FA" persistKey="aiza-uitleg">
+      <TimestampLabel />
+      <Scene1_OchtendDruk />
+      <Scene2_TaakStapel />
+      <Scene3_OntdekkingApp />
+      <Scene4_DrieLessen />
+      <Scene5_WatIsHet />
+      <Scene6_VoorWerkgever />
+      <Scene7_Eindkaart />
+    </Stage>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
