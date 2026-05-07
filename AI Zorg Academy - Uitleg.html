@@ -1,0 +1,926 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>AI Zorg Academy — Werkgevers-pitch</title>
+<style>
+/* ── Brand fonts ── */
+@font-face {
+  font-family: "Inter";
+  src: url("project/fonts/Inter-VariableFont_opsz_wght.ttf") format("truetype-variations");
+  font-weight: 100 900; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("project/fonts/Inter-Italic-VariableFont_opsz_wght.ttf") format("truetype-variations");
+  font-weight: 100 900; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("project/fonts/PlusJakartaSans-VariableFont_wght.ttf") format("truetype-variations");
+  font-weight: 200 800; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("project/fonts/PlusJakartaSans-Italic-VariableFont_wght.ttf") format("truetype-variations");
+  font-weight: 200 800; font-style: italic; font-display: swap;
+}
+
+:root {
+  --aiza-blauw:        #0077B6;
+  --aiza-lichtblauw:   #00B4D8;
+  --aiza-donkerblauw:  #1B263B;
+  --aiza-oranje:       #FF6B35;
+  --aiza-wit:          #FFFFFF;
+  --aiza-achtergrond:  #F8F9FA;
+  --aiza-grijs:        #E0E0E0;
+  --aiza-grijs-licht:  #F0F4F8;
+  --aiza-grijs-mid:    #9CA3AF;
+  --aiza-grijs-donker: #6B7280;
+  --aiza-tekst-body:   #374151;
+  --aiza-goed:         #22C55E;
+  --aiza-prompt:       #7C3AED;
+}
+
+html, body { margin: 0; padding: 0; height: 100%; background: #0a0a0a; overflow: hidden; }
+#root { position: fixed; inset: 0; }
+</style>
+</head>
+<body>
+<div id="root" data-screen-label="00:00"></div>
+
+<script src="vendor/react.development.js"></script>
+<script src="vendor/react-dom.development.js"></script>
+<script src="vendor/babel.js"></script>
+
+<script type="text/babel">
+// ── Easing ──────────────────────────────────────────────────────────────────
+const Easing = {
+  linear: (t) => t,
+  easeInQuad:     (t) => t * t,
+  easeOutQuad:    (t) => t * (2 - t),
+  easeInOutQuad:  (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+  easeInCubic:    (t) => t * t * t,
+  easeOutCubic:   (t) => (--t) * t * t + 1,
+  easeInOutCubic: (t) => t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1,
+  easeOutBack: (t) => {
+    const c1 = 1.70158, c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  },
+  easeOutElastic: (t) => {
+    const c4 = (2 * Math.PI) / 3;
+    if (t === 0) return 0; if (t === 1) return 1;
+    return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+  },
+};
+
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+function animate({ from = 0, to = 1, start = 0, end = 1, ease = Easing.easeInOutCubic }) {
+  return (t) => {
+    if (t <= start) return from;
+    if (t >= end) return to;
+    return from + (to - from) * ease((t - start) / (end - start));
+  };
+}
+
+// ── Timeline ─────────────────────────────────────────────────────────────────
+const TimelineContext = React.createContext({ time: 0, duration: 10, playing: false });
+const useTime = () => React.useContext(TimelineContext).time;
+const useTimeline = () => React.useContext(TimelineContext);
+
+// ── Sprite ────────────────────────────────────────────────────────────────────
+const SpriteContext = React.createContext({ localTime: 0, progress: 0, duration: 0 });
+const useSprite = () => React.useContext(SpriteContext);
+
+function Sprite({ start = 0, end = Infinity, children, keepMounted = false }) {
+  const { time } = useTimeline();
+  const visible = time >= start && time <= end;
+  if (!visible && !keepMounted) return null;
+  const duration = end - start;
+  const localTime = Math.max(0, time - start);
+  const progress = duration > 0 && isFinite(duration) ? clamp(localTime / duration, 0, 1) : 0;
+  const value = { localTime, progress, duration, visible };
+  return (
+    <SpriteContext.Provider value={value}>
+      {typeof children === 'function' ? children(value) : children}
+    </SpriteContext.Provider>
+  );
+}
+
+// ── Stage ─────────────────────────────────────────────────────────────────────
+function Stage({ width = 1080, height = 1920, duration = 44, background = '#F8F9FA',
+                 loop = true, autoplay = true, persistKey = 'animstage', children }) {
+  const [time, setTime] = React.useState(() => {
+    try {
+      const v = parseFloat(localStorage.getItem(persistKey + ':t') || '0');
+      return isFinite(v) ? clamp(v, 0, duration) : 0;
+    } catch { return 0; }
+  });
+  const [playing, setPlaying] = React.useState(autoplay);
+  const [hoverTime, setHoverTime] = React.useState(null);
+  const [scale, setScale] = React.useState(1);
+
+  const stageRef = React.useRef(null);
+  const rafRef = React.useRef(null);
+  const lastTsRef = React.useRef(null);
+
+  React.useEffect(() => {
+    try { localStorage.setItem(persistKey + ':t', String(time)); } catch {}
+  }, [time, persistKey]);
+
+  React.useEffect(() => {
+    if (!stageRef.current) return;
+    const el = stageRef.current;
+    const measure = () => {
+      const barH = 44;
+      const s = Math.min(el.clientWidth / width, (el.clientHeight - barH) / height);
+      setScale(Math.max(0.05, s));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener('resize', measure);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
+  }, [width, height]);
+
+  // Headless recording controls
+  React.useEffect(() => {
+    window.__stage_seek = (t) => setTime(clamp(t, 0, duration));
+    window.__stage_pause = () => setPlaying(false);
+    window.__stage_ready = true;
+    return () => { delete window.__stage_seek; delete window.__stage_pause; delete window.__stage_ready; };
+  }, [duration]);
+
+  React.useEffect(() => {
+    if (!playing) { lastTsRef.current = null; return; }
+    const step = (ts) => {
+      if (lastTsRef.current == null) lastTsRef.current = ts;
+      const dt = (ts - lastTsRef.current) / 1000;
+      lastTsRef.current = ts;
+      setTime((t) => {
+        let next = t + dt;
+        if (next >= duration) {
+          if (loop) next = next % duration;
+          else { next = duration; setPlaying(false); }
+        }
+        return next;
+      });
+      rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); lastTsRef.current = null; };
+  }, [playing, duration, loop]);
+
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+      if (e.code === 'Space') { e.preventDefault(); setPlaying(p => !p); }
+      else if (e.code === 'ArrowLeft') setTime(t => clamp(t - (e.shiftKey ? 1 : 0.1), 0, duration));
+      else if (e.code === 'ArrowRight') setTime(t => clamp(t + (e.shiftKey ? 1 : 0.1), 0, duration));
+      else if (e.key === '0' || e.code === 'Home') setTime(0);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [duration]);
+
+  const displayTime = hoverTime != null ? hoverTime : time;
+  const ctxValue = React.useMemo(
+    () => ({ time: displayTime, duration, playing, setTime, setPlaying }),
+    [displayTime, duration, playing]
+  );
+
+  return (
+    <div ref={stageRef} style={{
+      position: 'absolute', inset: 0,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      background: '#0a0a0a',
+      fontFamily: 'Inter, system-ui, sans-serif',
+    }}>
+      <div style={{
+        flex: 1, width: '100%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden', minHeight: 0,
+      }}>
+        <div style={{
+          width, height, background, position: 'relative',
+          transform: `scale(${scale})`, transformOrigin: 'center',
+          flexShrink: 0,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+          overflow: 'hidden',
+        }}>
+          <TimelineContext.Provider value={ctxValue}>
+            {children}
+          </TimelineContext.Provider>
+        </div>
+      </div>
+      <PlaybackBar
+        time={displayTime} actualTime={time} duration={duration} playing={playing}
+        onPlayPause={() => setPlaying(p => !p)}
+        onReset={() => setTime(0)}
+        onSeek={(t) => setTime(t)}
+        onHover={(t) => setHoverTime(t)}
+      />
+    </div>
+  );
+}
+
+// ── Playback bar ──────────────────────────────────────────────────────────────
+function PlaybackBar({ time, duration, playing, onPlayPause, onReset, onSeek, onHover }) {
+  const trackRef = React.useRef(null);
+  const [dragging, setDragging] = React.useState(false);
+
+  const timeFromEvent = React.useCallback((e) => {
+    const rect = trackRef.current.getBoundingClientRect();
+    return clamp((e.clientX - rect.left) / rect.width, 0, 1) * duration;
+  }, [duration]);
+
+  const onTrackMove = (e) => {
+    if (!trackRef.current) return;
+    const t = timeFromEvent(e);
+    if (dragging) onSeek(t); else onHover(t);
+  };
+
+  const onTrackDown = (e) => {
+    setDragging(true);
+    onSeek(timeFromEvent(e));
+    onHover(null);
+  };
+
+  React.useEffect(() => {
+    if (!dragging) return;
+    const onUp = () => setDragging(false);
+    const onMove = (e) => { if (trackRef.current) onSeek(timeFromEvent(e)); };
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('mousemove', onMove);
+    return () => { window.removeEventListener('mouseup', onUp); window.removeEventListener('mousemove', onMove); };
+  }, [dragging, timeFromEvent, onSeek]);
+
+  const pct = duration > 0 ? (time / duration) * 100 : 0;
+  const fmt = (t) => {
+    const total = Math.max(0, t);
+    const m = Math.floor(total / 60);
+    const s = Math.floor(total % 60);
+    const cs = Math.floor((total * 100) % 100);
+    return `${m}:${String(s).padStart(2,'0')}.${String(cs).padStart(2,'0')}`;
+  };
+  const mono = 'JetBrains Mono, ui-monospace, SFMono-Regular, monospace';
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '8px 16px',
+      background: 'rgba(20,20,20,0.92)',
+      borderTop: '1px solid rgba(255,255,255,0.08)',
+      width: '100%', maxWidth: 680, alignSelf: 'center',
+      borderRadius: 8, color: '#f6f4ef',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      userSelect: 'none', flexShrink: 0,
+    }}>
+      <IconButton onClick={onReset} title="Return to start (0)">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M3 2v10M12 2L5 7l7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
+        </svg>
+      </IconButton>
+      <IconButton onClick={onPlayPause} title="Play/pause (space)">
+        {playing ? (
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <rect x="3" y="2" width="3" height="10" fill="currentColor"/>
+            <rect x="8" y="2" width="3" height="10" fill="currentColor"/>
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M3 2l9 5-9 5V2z" fill="currentColor"/>
+          </svg>
+        )}
+      </IconButton>
+      <div style={{ fontFamily: mono, fontSize: 12, fontVariantNumeric: 'tabular-nums', width: 64, textAlign: 'right', color: '#f6f4ef' }}>
+        {fmt(time)}
+      </div>
+      <div
+        ref={trackRef}
+        onMouseMove={onTrackMove}
+        onMouseLeave={() => { if (!dragging) onHover(null); }}
+        onMouseDown={onTrackDown}
+        style={{ flex: 1, height: 22, position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+      >
+        <div style={{ position: 'absolute', left: 0, right: 0, height: 4, background: 'rgba(255,255,255,0.12)', borderRadius: 2 }}/>
+        <div style={{ position: 'absolute', left: 0, width: `${pct}%`, height: 4, background: 'oklch(72% 0.12 250)', borderRadius: 2 }}/>
+        <div style={{ position: 'absolute', left: `${pct}%`, top: '50%', width: 12, height: 12, marginLeft: -6, marginTop: -6, background: '#fff', borderRadius: 6, boxShadow: '0 2px 4px rgba(0,0,0,0.4)' }}/>
+      </div>
+      <div style={{ fontFamily: mono, fontSize: 12, fontVariantNumeric: 'tabular-nums', width: 64, textAlign: 'left', color: 'rgba(246,244,239,0.55)' }}>
+        {fmt(duration)}
+      </div>
+    </div>
+  );
+}
+
+function IconButton({ children, onClick, title }) {
+  const [hover, setHover] = React.useState(false);
+  return (
+    <button onClick={onClick} title={title}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{
+        width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: hover ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6,
+        color: '#f6f4ef', cursor: 'pointer', padding: 0, transition: 'background 120ms',
+      }}>
+      {children}
+    </button>
+  );
+}
+
+// ── Audio track ───────────────────────────────────────────────────────────────
+function AudioTrack({ src, volume = 0.6, startOffset = 0, fadeIn = 0 }) {
+  const { time, playing, duration } = useTimeline();
+  const audioRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const a = new Audio(src);
+    a.preload = 'auto';
+    a.volume = 0;
+    audioRef.current = a;
+    return () => { a.pause(); audioRef.current = null; };
+  }, [src]);
+
+  React.useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const target = time + startOffset;
+    if (Math.abs(a.currentTime - target) > 0.25) {
+      try { a.currentTime = Math.max(0, target); } catch (e) {}
+    }
+    if (playing) a.play().catch(() => {});
+    else a.pause();
+  }, [playing, time, duration, startOffset]);
+
+  React.useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const fadeOutDur = 1.5;
+    const fadeOutStart = duration - fadeOutDur;
+    let v = volume;
+    if (fadeIn > 0 && time < fadeIn) v = volume * Math.max(0, Math.min(1, time / fadeIn));
+    if (time > fadeOutStart) {
+      const t = Math.max(0, Math.min(1, (time - fadeOutStart) / fadeOutDur));
+      v = Math.min(v, volume * (1 - t));
+    }
+    a.volume = v;
+  }, [time, duration, volume, fadeIn]);
+
+  return null;
+}
+
+// ── Timestamp label ───────────────────────────────────────────────────────────
+function TimestampLabel() {
+  const t = useTime();
+  React.useEffect(() => {
+    const root = document.getElementById('root');
+    if (!root) return;
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    root.setAttribute('data-screen-label', `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`);
+  }, [Math.floor(t)]);
+  return null;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SCENE 1 — HOOK · 0–7s
+// "Je team gebruikt al AI." Phone with ChatGPT tab open.
+// ════════════════════════════════════════════════════════════════════
+function Scene1_Hook() {
+  return (
+    <Sprite start={0} end={7}>
+      {({ localTime: lt }) => {
+        const enterT = Math.min(1, lt / 0.9);
+        const phoneScale = 0.8 + Easing.easeOutBack(enterT) * 0.2;
+        const phoneOp = enterT;
+        const phoneRot = (1 - enterT) * -3;
+        const bgOp = Math.min(1, lt / 0.5);
+
+        const titleT = Math.max(0, Math.min(1, (lt - 2.8) / 0.5));
+        const titleOp = titleT * (lt > 6.4 ? Math.max(0, 1 - (lt - 6.4) / 0.5) : 1);
+        const titleY = (1 - Easing.easeOutCubic(titleT)) * 30;
+
+        const subT = Math.max(0, Math.min(1, (lt - 3.5) / 0.5));
+        const subOp = subT * (lt > 6.4 ? Math.max(0, 1 - (lt - 6.4) / 0.5) : 1);
+        const subY = (1 - Easing.easeOutCubic(subT)) * 20;
+
+        return (
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #FFF6F2 0%, #F8F9FA 60%)', opacity: bgOp }}>
+            {/* Soft bg blob */}
+            <div style={{
+              position: 'absolute', left: '50%', top: 480, width: 900, height: 900,
+              transform: 'translate(-50%, -50%)', borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(255,107,53,0.10) 0%, rgba(255,107,53,0) 70%)',
+              filter: 'blur(20px)',
+            }}/>
+
+            {/* Phone */}
+            <div style={{
+              position: 'absolute', left: '50%', top: 700, width: 540, height: 1080,
+              transform: `translate(-50%, -50%) scale(${phoneScale}) rotate(${phoneRot}deg)`,
+              opacity: phoneOp, background: '#1B263B', borderRadius: 64, padding: 14,
+              boxShadow: '0 30px 80px rgba(27,38,59,0.25), 0 0 0 2px rgba(0,0,0,0.05)',
+            }}>
+              <div style={{ width: '100%', height: '100%', background: '#fff', borderRadius: 52, overflow: 'hidden', position: 'relative' }}>
+                {/* Status bar */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, height: 56,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '0 44px', fontSize: 22, fontWeight: 600, color: '#1B263B',
+                  fontFamily: 'Inter, system-ui',
+                }}>
+                  <span>09:14</span>
+                  <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}><span style={{ fontSize: 16 }}>•••</span></span>
+                </div>
+                {/* Notch */}
+                <div style={{ position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)', width: 200, height: 36, background: '#000', borderRadius: 20 }}/>
+                {/* ChatGPT header */}
+                <div style={{ position: 'absolute', top: 80, left: 0, right: 0, padding: '20px 32px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 22, fontWeight: 600, color: '#1B263B', fontFamily: 'Inter, system-ui' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#10A37F', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 20 }}>AI</div>
+                    <span>ChatGPT</span>
+                  </div>
+                </div>
+                <Scene1_TypedPrompt lt={lt} />
+                <Scene1_Reply lt={lt} />
+              </div>
+            </div>
+
+            {/* Title */}
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 280, textAlign: 'center', fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', opacity: titleOp, transform: `translateY(${titleY}px)` }}>
+              <div style={{ fontSize: 88, fontWeight: 800, color: '#1B263B', letterSpacing: '-0.03em', lineHeight: 1.05, padding: '0 80px' }}>
+                Je team gebruikt<br/>al AI.
+              </div>
+            </div>
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 180, textAlign: 'center', fontFamily: 'Inter, system-ui', opacity: subOp, transform: `translateY(${subY}px)` }}>
+              <div style={{ fontSize: 28, color: '#6B7280', fontWeight: 500, letterSpacing: '-0.005em' }}>Of je het nu weet of niet.</div>
+            </div>
+          </div>
+        );
+      }}
+    </Sprite>
+  );
+}
+
+function Scene1_TypedPrompt({ lt }) {
+  const fullText = 'Schrijf een rapportage over Mw. de Vries...';
+  const tStart = 0.9, tEnd = 2.6;
+  const typeT = Math.max(0, Math.min(1, (lt - tStart) / (tEnd - tStart)));
+  const charCount = Math.floor(fullText.length * typeT);
+  const text = fullText.slice(0, charCount);
+  const showCursor = lt > tStart && lt < tEnd && Math.floor(lt * 2) % 2 === 0;
+  const bubbleOp = lt > tStart - 0.2 ? 1 : 0;
+  return (
+    <div style={{ position: 'absolute', top: 200, left: 32, right: 32, opacity: bubbleOp }}>
+      <div style={{ background: '#F0F4F8', borderRadius: 24, padding: '20px 24px', fontSize: 22, lineHeight: 1.4, color: '#1B263B', fontFamily: 'Inter, system-ui', marginLeft: 80, minHeight: 60 }}>
+        {text}{showCursor ? <span style={{ color: '#FF6B35', fontWeight: 600 }}>|</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function Scene1_Reply({ lt }) {
+  const start = 2.9;
+  if (lt < start) return null;
+  const op = Math.min(1, (lt - start) / 0.4);
+  const dotPhase = Math.floor((lt - start) * 2.5) % 3;
+  return (
+    <div style={{ position: 'absolute', top: 360, left: 32, right: 32, opacity: op }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '20px 28px', background: '#fff', border: '1px solid #E0E0E0', borderRadius: 24, marginRight: 80, width: 'fit-content' }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: i <= dotPhase ? '#9CA3AF' : '#E0E0E0' }}/>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SCENE 2 — HET RISICO · 7–16s
+// Patiëntdata in een gratis tool → rode flag stamp.
+// ════════════════════════════════════════════════════════════════════
+function Scene2_Risico() {
+  return (
+    <Sprite start={7} end={16}>
+      {({ localTime: lt }) => {
+        const bgOp = Math.min(1, lt / 0.4);
+
+        const titleT = Math.max(0, Math.min(1, (lt - 0.2) / 0.5));
+        const titleOp = titleT * (lt > 8.4 ? Math.max(0, 1 - (lt - 8.4) / 0.5) : 1);
+        const titleY = (1 - Easing.easeOutCubic(titleT)) * 30;
+
+        const cardT = Math.max(0, Math.min(1, (lt - 0.8) / 0.5));
+        const cardOp = cardT * (lt > 8.4 ? Math.max(0, 1 - (lt - 8.4) / 0.5) : 1);
+        const cardScale = 0.9 + Easing.easeOutBack(cardT) * 0.1;
+
+        const fullText = 'Schrijf rapportage over Mw. J. de Vries, geboren 12-04-1942, BSN 1234.56.789, opname diabetes type 2, medicatie metformine 500mg.';
+        const tStart = 1.5, tEnd = 5.0;
+        const typeT = Math.max(0, Math.min(1, (lt - tStart) / (tEnd - tStart)));
+        const charCount = Math.floor(fullText.length * typeT);
+        const text = fullText.slice(0, charCount);
+        const showCursor = lt > tStart && lt < tEnd && Math.floor(lt * 2) % 2 === 0;
+
+        const flagStart = 5.2;
+        const flagT = Math.max(0, Math.min(1, (lt - flagStart) / 0.4));
+        const flagOp = flagT * (lt > 8.4 ? Math.max(0, 1 - (lt - 8.4) / 0.5) : 1);
+        const flagScale = 0.5 + Easing.easeOutBack(flagT) * 0.5;
+        const flagRot = (1 - flagT) * -8 + (-3);
+
+        const capStart = 5.9;
+        const capT = Math.max(0, Math.min(1, (lt - capStart) / 0.4));
+        const capOp = capT * (lt > 8.4 ? Math.max(0, 1 - (lt - 8.4) / 0.5) : 1);
+        const capY = (1 - Easing.easeOutCubic(capT)) * 16;
+
+        return (
+          <div style={{ position: 'absolute', inset: 0, background: '#F8F9FA', opacity: bgOp }}>
+            {/* Title */}
+            <div style={{ position: 'absolute', left: 80, right: 80, top: 200, textAlign: 'left', fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', opacity: titleOp, transform: `translateY(${titleY}px)` }}>
+              <div style={{ fontSize: 32, color: '#0077B6', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16 }}>Maar zonder uitleg…</div>
+              <div style={{ fontSize: 84, fontWeight: 800, color: '#1B263B', letterSpacing: '-0.03em', lineHeight: 1.05 }}>…belandt dit<br/>in een gratis tool.</div>
+            </div>
+
+            {/* Document card */}
+            <div style={{ position: 'absolute', left: 80, right: 80, top: 720, opacity: cardOp, transform: `scale(${cardScale})`, transformOrigin: 'center top' }}>
+              <div style={{ background: '#fff', border: '1px solid #E0E0E0', borderRadius: 16, padding: '36px 36px', fontFamily: 'Courier New, monospace', fontSize: 30, lineHeight: 1.55, color: '#1B263B', position: 'relative', minHeight: 380, boxShadow: '0 8px 30px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontFamily: 'Inter, system-ui', fontSize: 18, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, marginBottom: 16 }}>chatgpt · prompt</div>
+                <Scene2_HighlightedText text={text} />
+                {showCursor ? <span style={{ color: '#FF6B35', fontWeight: 700 }}>|</span> : null}
+              </div>
+              {/* Stamp */}
+              <div style={{ position: 'absolute', top: -40, right: -20, opacity: flagOp, transform: `rotate(${flagRot}deg) scale(${flagScale})`, transformOrigin: 'center center' }}>
+                <div style={{ background: '#FF6B35', color: '#fff', padding: '14px 28px', borderRadius: 12, fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', fontSize: 32, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', boxShadow: '0 8px 24px rgba(255,107,53,0.4)', border: '3px solid #fff', whiteSpace: 'nowrap' }}>⚠ Privacy lek</div>
+              </div>
+            </div>
+
+            {/* Caption */}
+            <div style={{ position: 'absolute', left: 80, right: 80, bottom: 200, textAlign: 'center', fontFamily: 'Inter, system-ui', opacity: capOp, transform: `translateY(${capY}px)` }}>
+              <div style={{ fontSize: 32, color: '#374151', fontWeight: 500, lineHeight: 1.45 }}>
+                Patiëntdata in een gratis AI-tool.<br/>
+                <span style={{ color: '#1B263B', fontWeight: 700 }}>Dat wil je niet.</span>
+              </div>
+            </div>
+          </div>
+        );
+      }}
+    </Sprite>
+  );
+}
+
+function Scene2_HighlightedText({ text }) {
+  const sensitive = ['Mw. J. de Vries', '12-04-1942', 'BSN 1234.56.789'];
+  let parts = [{ t: text, hl: false }];
+  for (const s of sensitive) {
+    const next = [];
+    for (const p of parts) {
+      if (p.hl) { next.push(p); continue; }
+      const idx = p.t.indexOf(s);
+      if (idx === -1) { next.push(p); continue; }
+      if (idx > 0) next.push({ t: p.t.slice(0, idx), hl: false });
+      next.push({ t: s, hl: true });
+      if (idx + s.length < p.t.length) next.push({ t: p.t.slice(idx + s.length), hl: false });
+    }
+    parts = next;
+  }
+  return (
+    <span>
+      {parts.map((p, i) => p.hl ? (
+        <span key={i} style={{ background: '#FFE0E0', padding: '2px 8px', borderRadius: 4, color: '#B91C1C', fontWeight: 700 }}>{p.t}</span>
+      ) : (
+        <span key={i}>{p.t}</span>
+      ))}
+    </span>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SCENE 3 — DE OPLOSSING · 16–24s
+// AI Zorg Academy intro — phone with all 7 leerroutes.
+// ════════════════════════════════════════════════════════════════════
+function Scene3_Oplossing() {
+  return (
+    <Sprite start={16} end={24}>
+      {({ localTime: lt }) => {
+        const bgOp = Math.min(1, lt / 0.5);
+
+        const titleT = Math.max(0, Math.min(1, (lt - 0.2) / 0.5));
+        const titleOp = titleT * (lt > 7.4 ? Math.max(0, 1 - (lt - 7.4) / 0.5) : 1);
+        const titleY = (1 - Easing.easeOutCubic(titleT)) * 30;
+
+        const phoneT = Math.max(0, Math.min(1, (lt - 0.7) / 0.6));
+        const phoneOp = phoneT * (lt > 7.4 ? Math.max(0, 1 - (lt - 7.4) / 0.5) : 1);
+        const phoneScale = 0.85 + Easing.easeOutBack(phoneT) * 0.15;
+        const phoneY = (1 - Easing.easeOutCubic(phoneT)) * 60;
+
+        const capT = Math.max(0, Math.min(1, (lt - 4.0) / 0.5));
+        const capOp = capT * (lt > 7.4 ? Math.max(0, 1 - (lt - 7.4) / 0.5) : 1);
+        const capY = (1 - Easing.easeOutCubic(capT)) * 20;
+
+        return (
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #E3F2FD 0%, #F0F7FF 60%, #F8F9FA 100%)', opacity: bgOp }}>
+            {/* Title */}
+            <div style={{ position: 'absolute', left: 0, right: 0, top: 90, textAlign: 'center', fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', opacity: titleOp, transform: `translateY(${titleY}px)`, padding: '0 80px' }}>
+              <div style={{ fontSize: 26, color: '#0077B6', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>Daarom is er…</div>
+              <div style={{ fontSize: 76, fontWeight: 800, color: '#1B263B', letterSpacing: '-0.03em', lineHeight: 1.05 }}>AI Zorg Academy.</div>
+            </div>
+
+            {/* Phone — 480×960, fit inside 1920 frame */}
+            <div style={{
+              position: 'absolute', left: '50%', top: 360,
+              width: 480, height: 960,
+              transform: `translateX(-50%) translateY(${phoneY}px) scale(${phoneScale})`,
+              transformOrigin: 'center top',
+              opacity: phoneOp, background: '#1B263B', borderRadius: 56, padding: 12,
+              boxShadow: '0 30px 80px rgba(0,119,182,0.3)',
+            }}>
+              <div style={{ width: '100%', height: '100%', background: '#fff', borderRadius: 44, overflow: 'hidden', position: 'relative' }}>
+                {/* Status bar */}
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 44, display: 'flex', justifyContent: 'space-between', padding: '12px 32px', fontSize: 18, fontWeight: 600, color: '#1B263B', fontFamily: 'Inter, system-ui' }}>
+                  <span>09:14</span>
+                </div>
+                <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', width: 150, height: 28, background: '#000', borderRadius: 16 }}/>
+                {/* App header */}
+                <div style={{ position: 'absolute', top: 60, left: 0, right: 0, padding: '14px 24px' }}>
+                  <div style={{ fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', fontSize: 30, fontWeight: 800, color: '#1B263B', letterSpacing: '-0.02em', lineHeight: 1.1 }}>AI Zorg Academy</div>
+                  <div style={{ fontFamily: 'Inter, system-ui', fontSize: 16, color: '#6B7280', marginTop: 6, lineHeight: 1.35 }}>7 leerroutes · in je eigen tempo</div>
+                </div>
+                <Scene3_RouteCards lt={lt} />
+              </div>
+            </div>
+
+            {/* Caption pills */}
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 90, textAlign: 'center', opacity: capOp, transform: `translateY(${capY}px)` }}>
+              <div style={{ display: 'inline-flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', padding: '0 60px' }}>
+                {[{ t: 'Gratis', c: '#22C55E' }, { t: 'Online', c: '#0077B6' }, { t: 'MBO niveau 2–4', c: '#FF6B35' }].map((p, i) => (
+                  <div key={i} style={{ padding: '12px 22px', background: '#fff', border: `2px solid ${p.c}`, color: p.c, borderRadius: 28, fontSize: 22, fontWeight: 700, fontFamily: 'Inter, system-ui', whiteSpace: 'nowrap' }}>{p.t}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      }}
+    </Sprite>
+  );
+}
+
+function Scene3_RouteCards({ lt }) {
+  const cards = [
+    { num: '01', title: 'Basis AI',           color: '#0077B6' },
+    { num: '02', title: 'Prompt Engineering', color: '#7C3AED' },
+    { num: '03', title: 'AI & Ethiek',        color: '#22C55E' },
+    { num: '04', title: 'In de praktijk',     color: '#FF6B35' },
+    { num: '05', title: 'AI Tools',           color: '#00B4D8' },
+    { num: '06', title: 'De AI Act',          color: '#3949AB' },
+    { num: '07', title: 'Verdieping',         color: '#F57F17' },
+  ];
+  return (
+    <div style={{ position: 'absolute', top: 180, bottom: 32, left: 24, right: 24, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+      {cards.map((c, i) => {
+        const startT = 1.4 + i * 0.14;
+        const t = Math.max(0, Math.min(1, (lt - startT) / 0.4));
+        const y = (1 - Easing.easeOutCubic(t)) * 22;
+        const scale = 0.92 + Easing.easeOutBack(t) * 0.08;
+        return (
+          <div key={i} style={{ background: '#fff', borderLeft: `4px solid ${c.color}`, borderRadius: '0 10px 10px 0', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: t, transform: `translateY(${y}px) scale(${scale})`, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+            <div style={{ fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', fontSize: 18, fontWeight: 800, color: c.color, minWidth: 38 }}>{c.num}</div>
+            <div style={{ fontFamily: 'Inter, system-ui', fontSize: 19, fontWeight: 700, color: '#1B263B', whiteSpace: 'nowrap' }}>{c.title}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SCENE 4 — HOE JE TEAM LEERT · 24–32s
+// Microleren: korte modules, praktijkopdrachten, MBO 2-4.
+// ════════════════════════════════════════════════════════════════════
+function Scene4_WatJeLeert() {
+  return (
+    <Sprite start={24} end={32}>
+      {({ localTime: lt }) => {
+        const bgOp = Math.min(1, lt / 0.4);
+
+        const titleT = Math.max(0, Math.min(1, (lt - 0.2) / 0.5));
+        const titleOp = titleT * (lt > 7.4 ? Math.max(0, 1 - (lt - 7.4) / 0.5) : 1);
+        const titleY = (1 - Easing.easeOutCubic(titleT)) * 30;
+
+        const items = [
+          { label: 'Korte modules',       sub: '15 minuten per onderwerp · in je eigen tempo', color: '#0077B6', bg: '#E3F2FD', startT: 0.9,  icon: 'clock'  },
+          { label: 'Praktijkopdrachten',  sub: 'Direct toepassen op de werkvloer',              color: '#7C3AED', bg: '#F8F4FF', startT: 1.6,  icon: 'check'  },
+          { label: 'Voor MBO 2–4',        sub: 'Geschreven voor zorgmedewerkers, in begrijpelijke taal', color: '#FF6B35', bg: '#FFF0EB', startT: 2.3, icon: 'people' },
+        ];
+
+        return (
+          <div style={{ position: 'absolute', inset: 0, background: '#F8F9FA', opacity: bgOp, overflow: 'hidden' }}>
+            {/* Decorative blobs */}
+            <div style={{ position: 'absolute', right: -200, top: -200, width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,119,182,0.06) 0%, rgba(0,119,182,0) 70%)' }}/>
+            <div style={{ position: 'absolute', left: -200, bottom: -100, width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,107,53,0.06) 0%, rgba(255,107,53,0) 70%)' }}/>
+
+            {/* Timeline rail */}
+            <div style={{ position: 'absolute', left: 134, top: 780, bottom: 200, width: 3, background: 'linear-gradient(180deg, #0077B6 0%, #7C3AED 50%, #FF6B35 100%)', opacity: titleOp * 0.35 }}/>
+
+            {/* Title */}
+            <div style={{ position: 'absolute', left: 80, right: 80, top: 180, textAlign: 'left', fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', opacity: titleOp, transform: `translateY(${titleY}px)` }}>
+              <div style={{ fontSize: 28, color: '#0077B6', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16 }}>Zo leert je team</div>
+              <div style={{ fontSize: 88, fontWeight: 800, color: '#1B263B', letterSpacing: '-0.03em', lineHeight: 1.05 }}>Geen cursus.<br/>Maar microleren.</div>
+            </div>
+
+            {/* Cards */}
+            <div style={{ position: 'absolute', left: 80, right: 80, top: 720, bottom: 140, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              {items.map((p, i) => {
+                const t = Math.max(0, Math.min(1, (lt - p.startT) / 0.45));
+                const op = t * (lt > 7.4 ? Math.max(0, 1 - (lt - 7.4) / 0.5) : 1);
+                const scale = 0.9 + Easing.easeOutBack(t) * 0.1;
+                const x = (1 - Easing.easeOutCubic(t)) * -60;
+                return (
+                  <div key={i} style={{ background: '#fff', border: '1px solid #E0E0E0', borderLeft: `6px solid ${p.color}`, borderRadius: '0 16px 16px 0', padding: '32px 32px', display: 'flex', alignItems: 'center', gap: 28, opacity: op, transform: `translateX(${x}px) scale(${scale})`, transformOrigin: 'left center', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+                    <div style={{ width: 96, height: 96, borderRadius: 20, background: p.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Scene4_Icon kind={p.icon} color={p.color} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', fontSize: 38, fontWeight: 800, color: '#1B263B', letterSpacing: '-0.015em', marginBottom: 6 }}>{p.label}</div>
+                      <div style={{ fontFamily: 'Inter, system-ui', fontSize: 22, color: '#6B7280', lineHeight: 1.4 }}>{p.sub}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }}
+    </Sprite>
+  );
+}
+
+function Scene4_Icon({ kind, color }) {
+  const sw = 4;
+  if (kind === 'clock') return (
+    <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+      <circle cx="26" cy="26" r="20" stroke={color} strokeWidth={sw}/>
+      <path d="M26 14 V26 L34 30" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+  if (kind === 'check') return (
+    <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+      <rect x="6" y="6" width="40" height="40" rx="6" stroke={color} strokeWidth={sw}/>
+      <path d="M16 26 L23 33 L37 19" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+  if (kind === 'people') return (
+    <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+      <circle cx="19" cy="18" r="6" stroke={color} strokeWidth={sw}/>
+      <circle cx="35" cy="20" r="5" stroke={color} strokeWidth={sw}/>
+      <path d="M8 42 C8 34, 14 30, 19 30 C24 30, 30 34, 30 42" stroke={color} strokeWidth={sw} strokeLinecap="round"/>
+      <path d="M30 42 C30 36, 34 33, 38 33 C42 33, 46 36, 46 42" stroke={color} strokeWidth={sw} strokeLinecap="round"/>
+    </svg>
+  );
+  return null;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SCENE 5 — DE CIJFERS · 32–37s
+// 7 routes · 36 modules · €0 licentiekosten · 0 reclame
+// ════════════════════════════════════════════════════════════════════
+function Scene5_Cijfers() {
+  return (
+    <Sprite start={32} end={37}>
+      {({ localTime: lt }) => {
+        const bgOp = Math.min(1, lt / 0.4);
+
+        const titleT = Math.max(0, Math.min(1, (lt - 0.15) / 0.4));
+        const titleOp = titleT * (lt > 4.4 ? Math.max(0, 1 - (lt - 4.4) / 0.5) : 1);
+        const titleY = (1 - Easing.easeOutCubic(titleT)) * 30;
+
+        const items = [
+          { num: '7',   label: 'leerroutes',     sub: 'Van basis tot AI Act',      color: '#0077B6', startT: 0.6 },
+          { num: '36',  label: 'korte modules',  sub: 'In je eigen tempo',         color: '#00B4D8', startT: 0.9 },
+          { num: '€0',  label: 'licentiekosten', sub: 'Geen verdienmodel',         color: '#22C55E', startT: 1.2 },
+          { num: '0',   label: 'reclame',        sub: 'Initiatief Practoraat Z&T', color: '#FF6B35', startT: 1.5 },
+        ];
+
+        return (
+          <div style={{ position: 'absolute', inset: 0, background: '#F8F9FA', opacity: bgOp }}>
+            {/* Title */}
+            <div style={{ position: 'absolute', left: 80, right: 80, top: 200, textAlign: 'left', fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', opacity: titleOp, transform: `translateY(${titleY}px)` }}>
+              <div style={{ fontSize: 28, color: '#0077B6', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16 }}>Voor jou als werkgever</div>
+              <div style={{ fontSize: 88, fontWeight: 800, color: '#1B263B', letterSpacing: '-0.03em', lineHeight: 1.05 }}>De cijfers<br/>op een rij.</div>
+            </div>
+
+            {/* Stats */}
+            <div style={{ position: 'absolute', left: 80, right: 80, top: 720, display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {items.map((it, i) => {
+                const t = Math.max(0, Math.min(1, (lt - it.startT) / 0.4));
+                const opEnd = lt > 4.4 ? Math.max(0, 1 - (lt - 4.4) / 0.5) : 1;
+                const op = t * opEnd;
+                const scale = 0.5 + Easing.easeOutBack(t) * 0.5;
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 32, padding: '20px 8px', borderBottom: i < items.length - 1 ? '1px solid #E0E0E0' : 'none', opacity: op }}>
+                    <div style={{ fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', fontSize: 130, fontWeight: 800, color: it.color, letterSpacing: '-0.04em', lineHeight: 1, minWidth: 220, transform: `scale(${scale})`, transformOrigin: 'left center' }}>{it.num}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', fontSize: 36, fontWeight: 700, color: '#1B263B', letterSpacing: '-0.015em', lineHeight: 1.15 }}>{it.label}</div>
+                      <div style={{ fontFamily: 'Inter, system-ui', fontSize: 22, color: '#6B7280', marginTop: 4 }}>{it.sub}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }}
+    </Sprite>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SCENE 6 — CTA · 37–44s
+// Logo + "Stuur je team door." + aizorgacademy.nl
+// ════════════════════════════════════════════════════════════════════
+function Scene6_CTA() {
+  return (
+    <Sprite start={37} end={44}>
+      {({ localTime: lt }) => {
+        const bgOp = Math.min(1, lt / 0.5);
+
+        const logoT = Math.max(0, Math.min(1, (lt - 0.1) / 0.5));
+        const logoOp = logoT;
+        const logoScale = 0.85 + Easing.easeOutBack(logoT) * 0.15;
+        const logoY = (1 - Easing.easeOutCubic(logoT)) * 20;
+
+        const ctaT = Math.max(0, Math.min(1, (lt - 0.8) / 0.4));
+        const ctaOp = ctaT;
+        const ctaY = (1 - Easing.easeOutCubic(ctaT)) * 16;
+
+        const urlT = Math.max(0, Math.min(1, (lt - 1.4) / 0.4));
+        const urlOp = urlT;
+        const urlY = (1 - Easing.easeOutCubic(urlT)) * 16;
+
+        const underT = Math.max(0, Math.min(1, (lt - 1.9) / 0.5));
+        const underW = Easing.easeOutCubic(underT);
+
+        return (
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #FFFFFF 0%, #F8F9FA 100%)', opacity: bgOp, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            {/* Logo + wordmark */}
+            <div style={{ opacity: logoOp, transform: `scale(${logoScale}) translateY(${logoY}px)`, display: 'flex', alignItems: 'center', gap: 28, marginBottom: 60 }}>
+              <Scene6_Logo />
+              <div style={{ fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', fontWeight: 800, fontSize: 88, color: '#1B263B', letterSpacing: '-0.02em', lineHeight: 0.95 }}>
+                <div>AI Zorg</div>
+                <div style={{ fontWeight: 600 }}>Academy</div>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div style={{ opacity: ctaOp, transform: `translateY(${ctaY}px)`, fontFamily: 'Plus Jakarta Sans, Inter, sans-serif', fontSize: 56, fontWeight: 700, color: '#1B263B', letterSpacing: '-0.02em', marginBottom: 60, textAlign: 'center', whiteSpace: 'nowrap' }}>
+              Stuur je team door.
+            </div>
+
+            {/* URL with growing underline */}
+            <div style={{ opacity: urlOp, transform: `translateY(${urlY}px)`, position: 'relative', fontFamily: 'Inter, system-ui', fontSize: 56, fontWeight: 800, color: '#0077B6', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+              aizorgacademy.nl
+              <div style={{ position: 'absolute', left: 0, right: 0, bottom: -12, height: 6, background: '#FF6B35', borderRadius: 3, transform: `scaleX(${underW})`, transformOrigin: 'left center' }}/>
+            </div>
+          </div>
+        );
+      }}
+    </Sprite>
+  );
+}
+
+function Scene6_Logo() {
+  return (
+    <svg width="180" height="180" viewBox="0 0 180 180">
+      <rect x="0" y="0" width="180" height="180" rx="32" fill="#1B263B"/>
+      <rect x="70" y="30" width="40" height="120" rx="6" fill="#fff"/>
+      <rect x="30" y="70" width="120" height="40" rx="6" fill="#fff"/>
+      <circle cx="50" cy="90" r="4" fill="#00B4D8"/>
+      <circle cx="130" cy="90" r="4" fill="#00B4D8"/>
+      <circle cx="90" cy="50" r="4" fill="#00B4D8"/>
+      <circle cx="90" cy="130" r="4" fill="#00B4D8"/>
+    </svg>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// APP
+// ════════════════════════════════════════════════════════════════════
+function App() {
+  return (
+    <Stage width={1080} height={1920} duration={44} background="#F8F9FA" persistKey="aiza-uitleg-v3">
+      <TimestampLabel />
+      <AudioTrack src="project/assets/Innovate_and_Inspire.mp3" volume={0.275} startOffset={5} fadeIn={1.2} />
+      <Scene1_Hook />
+      <Scene2_Risico />
+      <Scene3_Oplossing />
+      <Scene4_WatJeLeert />
+      <Scene5_Cijfers />
+      <Scene6_CTA />
+    </Stage>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
